@@ -62,7 +62,8 @@ public class Server extends Thread {
 			}
 		} catch (IOException e1) {
 			e1.printStackTrace();
-			System.out.println(String.format("Server:Socket[]关闭流错误", socketItem.name));
+			System.out.println(String.format("Server:Socket[]关闭流错误",
+					socketItem.name));
 		}
 	}
 
@@ -86,14 +87,18 @@ public class Server extends Thread {
 		BufferedReader reader;
 		PrintWriter wr;
 		try {
-			// socket.setKeepAlive(true);
-			socket.setSoTimeout(1 * 1000);// 设置超时时间，超过该时间没有收到消息，就会抛出异常
+			socket.setKeepAlive(true);
+			socket.setSoTimeout(30 * 60 * 1000);// 设置读超时时间，超过该时间没有收到消息，就会抛出异常
 			wr = new PrintWriter(socket.getOutputStream());
-			reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+			reader = new BufferedReader(new InputStreamReader(
+					socket.getInputStream()));
 			String content = reader.readLine();
-			if (content != null && MessageFormatConfig.startWithFormat(content, MessageFormatConfig.LoginFormat)) {
-				socketItem = new SocketItem(MessageFormatConfig.getMsgInfo(content, MessageFormatConfig.LoginFormat),
-						socket, reader, wr);
+			if (content != null
+					&& MessageFormatConfig.startWithFormat(content,
+							MessageFormatConfig.LoginFormat)) {
+				socketItem = new SocketItem(MessageFormatConfig.getMsgInfo(
+						content, MessageFormatConfig.LoginFormat), socket,
+						reader, wr);
 			}
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -109,6 +114,7 @@ public class Server extends Thread {
 		}
 	}
 
+	//开启检查连接线程，出现异常java.net.SocketException: Connection reset
 	public void checkSocketAlice() {
 		new Thread() {
 			@Override
@@ -117,10 +123,11 @@ public class Server extends Thread {
 					for (MySocketHandle mySocket : socketMap.values()) {
 						SocketItem socketItem = mySocket.socketItem;
 						boolean isAlice = false;
-						if (mySocket.isAlive() && socketItem.socket.isConnected()) {
+						if (mySocket.isAlive()
+								&& socketItem.socket.isConnected()) {
 							try {
-								socketItem.socket.sendUrgentData(0xFF);// 检测是否断开连接
-							} catch (IOException e) {
+								//socketItem.socket.sendUrgentData(0xFF);// 检测是否断开连接,定时每5秒调用该方法出现异常java.net.SocketException: Connection reset
+							} catch (Exception e) {
 								offline(mySocket);
 							}
 							isAlice = true;
@@ -155,6 +162,8 @@ public class Server extends Thread {
 					if (content != null) {
 						System.out.println("handle:" + content);
 						// handle TODO
+						// 返回处理结果...
+						sendMsg("收到信息：" + content);
 					} else {
 						sleep(10);// 否则一直处于读取状态
 					}
@@ -162,13 +171,14 @@ public class Server extends Thread {
 			} catch (Exception e) {
 				e.printStackTrace();
 				this.isRunning = false;
-				System.out.println(String.format("Server:Socket[%s]中断退出了", socketItem.name));
+				System.out.println(String.format("Server:Socket[%s]中断退出了",
+						socketItem.name));
 				return;
 			}
 		}
 
-		public void sendMsg(String string) {
-			socketItem.wr.println("连接成功~");
+		public void sendMsg(String content) {
+			socketItem.wr.println(content);
 			socketItem.wr.flush();
 		}
 

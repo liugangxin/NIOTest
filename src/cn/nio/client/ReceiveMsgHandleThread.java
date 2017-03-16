@@ -5,7 +5,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 public class ReceiveMsgHandleThread extends Thread {
 
 	private volatile boolean running = true;
-	private final NIOClient clientItem;
+	public final NIOClient clientItem;
 	private LinkedBlockingQueue<String> receiveMsgQueue = new LinkedBlockingQueue<String>(10000);
 
 	public ReceiveMsgHandleThread(NIOClient clientItem) {
@@ -17,8 +17,8 @@ public class ReceiveMsgHandleThread extends Thread {
 		while (running) {
 			try {
 				String msg = receiveMsgQueue.take();
-				if (msg != null) {
-					clientItem.inTextArea.append(msg + "\n");
+				if (msg != null && !"".equals(msg)) {
+					clientItem.readNewMsg(msg);
 				}
 			} catch (InterruptedException e) {
 				e.printStackTrace();

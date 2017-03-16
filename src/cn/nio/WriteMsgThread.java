@@ -4,17 +4,17 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.concurrent.LinkedBlockingQueue;
 
-public class WriteMsgThread extends Thread{
+public class WriteMsgThread extends Thread {
 
 	private volatile boolean running = true;
 	private LinkedBlockingQueue<UserInfo> needWriteUserQueue = new LinkedBlockingQueue<UserInfo>();
-	
+
 	@Override
 	public void run() {
-		while(running){
+		while (running) {
 			try {
 				UserInfo userInfo = needWriteUserQueue.take();
-				if(userInfo!=null){
+				if (userInfo != null) {
 					doWrite(userInfo);
 				}
 			} catch (InterruptedException e) {
@@ -22,24 +22,24 @@ public class WriteMsgThread extends Thread{
 			}
 		}
 	}
-	
+
 	private void doWrite(UserInfo userInfo) {
 		ByteBuffer sendMsg = userInfo.getSendMsg();
-		if(sendMsg!=null){
+		if (sendMsg != null) {
 			try {
 				userInfo.socketChannel.write(sendMsg);
-				//sendMsg.compact();
+				// sendMsg.compact();
 			} catch (IOException e) {
 				e.printStackTrace();
 			}
 		}
 	}
 
-	public void addWriteEvent(UserInfo userInfo){
+	public void addWriteEvent(UserInfo userInfo) {
 		this.needWriteUserQueue.add(userInfo);
 	}
-	
-	public void shutdown(){
+
+	public void shutdown() {
 		this.running = false;
 	}
 }

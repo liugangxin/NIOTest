@@ -16,7 +16,6 @@ import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.util.Arrays;
 import java.util.Set;
-import java.util.concurrent.LinkedBlockingQueue;
 
 import javax.swing.JButton;
 import javax.swing.JFrame;
@@ -25,8 +24,6 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
-
-import cn.nio.UserInfo;
 
 public class NIOClient extends JFrame {
 	public static void main(String[] args) {
@@ -102,8 +99,7 @@ public class NIOClient extends JFrame {
 			@Override
 			public void actionPerformed(ActionEvent e) {
 				if (myClient.isConnecting()) {
-					JOptionPane.showMessageDialog(null, "已连接...", "提示",
-							JOptionPane.CANCEL_OPTION);
+					JOptionPane.showMessageDialog(null, "已连接...", "提示", JOptionPane.CANCEL_OPTION);
 					return;
 				}
 				try {
@@ -112,17 +108,16 @@ public class NIOClient extends JFrame {
 					e1.printStackTrace();
 					inTextArea.append("连接失败。。。" + "\n");
 				}
-				if (myClient.isConnecting()) {
-					readMsgFromServer();
-				}
+				clientStart();
+				JOptionPane.showMessageDialog(null, "连接成功！！！", "提示", JOptionPane.CANCEL_OPTION);
 			}
 
 		});
 		disConnectButton.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent e) {
-				// TODO
-
+				disConnect();
+				inTextArea.append("断开连接。。。" + "\n");
 			}
 		});
 		sendMsgButton.addActionListener(new ActionListener() {
@@ -130,20 +125,30 @@ public class NIOClient extends JFrame {
 			public void actionPerformed(ActionEvent e) {
 				String text = outTextArea.getText();
 				if (text.length() == 0) {
-					JOptionPane.showMessageDialog(null, "消息为空", "错误",
-							JOptionPane.ERROR_MESSAGE);
+					JOptionPane.showMessageDialog(null, "消息为空", "错误", JOptionPane.ERROR_MESSAGE);
 				}
 				if (text.length() > 1000) {
-					JOptionPane.showMessageDialog(null, "消息太长", "错误",
-							JOptionPane.ERROR_MESSAGE);
+					JOptionPane.showMessageDialog(null, "消息太长", "错误", JOptionPane.ERROR_MESSAGE);
 				}
 				myClient.sendMsg(text);
 			}
 		});
 	}
 
-	private void readMsgFromServer() {
+	private void clientStart() {
 		new Thread(this.myClient).start();
+	}
+	
+	public void readNewMsg(String msg){
+		this.inTextArea.append(msg + "\n");
+	}
+	
+	public void disConnect(){
+		this.myClient.shutDown();
+	}
+	
+	public void errorServerClose(){
+		JOptionPane.showMessageDialog(null, "服务器关闭！！！", "提示", JOptionPane.CANCEL_OPTION);
 	}
 
 	static class MyClient implements Runnable {
@@ -151,8 +156,7 @@ public class NIOClient extends JFrame {
 		private final String name;
 		private SocketChannel socketChannel;
 		private Selector selector;
-	    private ByteBuffer receive = ByteBuffer.allocate(1024); 
-	    private final ReceiveMsgHandleThread receiveMsgThread;
+		private final ReceiveMsgHandleThread receiveMsgThread;
 
 		private MyClient(String name, NIOClient client) {
 			this.name = name;
@@ -171,6 +175,9 @@ public class NIOClient extends JFrame {
 		}
 
 		public boolean isConnecting() {
+			if (!running) {
+				return false;
+			}
 			if (this.socketChannel != null && this.socketChannel.isConnected()) {
 				return true;
 			}
@@ -181,15 +188,15 @@ public class NIOClient extends JFrame {
 			socketChannel = SocketChannel.open(new InetSocketAddress("10.18.4.44", 9998));
 			selector = Selector.open();
 			socketChannel.configureBlocking(false);
-			socketChannel.register(selector, SelectionKey.OP_CONNECT|SelectionKey.OP_READ|SelectionKey.OP_WRITE);
+			socketChannel.register(selector, SelectionKey.OP_CONNECT | SelectionKey.OP_READ | SelectionKey.OP_WRITE);
 			return true;
 		}
-		
+
 		public void listen() throws IOException {
-			while(running){
+			while (running) {
 				selector.select();
 				Set<SelectionKey> selectedKeys = selector.selectedKeys();
-				for(SelectionKey key : selectedKeys){
+				for (SelectionKey key : selectedKeys) {
 					handleKey(key);
 				}
 				selectedKeys.clear();
@@ -197,35 +204,50 @@ public class NIOClient extends JFrame {
 		}
 
 		private void handleKey(SelectionKey selKey) throws IOException {
-			// 测试此键的通道是否已准备好接受新的套接字连接。
-			if(selKey.isAcceptable()){
+			if (selKey.isReadable()) {
 				// 返回为之创建此键的通道。
-				ServerSocketChannel server = (ServerSocketChannel) selKey.channel();
-				// 此方法返回的套接字通道（如果有）将处于阻塞模式。  
-				SocketChannel client = server.accept();
-				// 配置为非阻塞  
-	            client.configureBlocking(false);
-	            // 注册到selector，等待读和写
-	            client.register(selector, SelectionKey.OP_READ  
-	                    | SelectionKey.OP_WRITE);
-			}else if(selKey.isReadable()){
-				// 返回为之创建此键的通道。
+				System.out.println("调用读...");
 				SocketChannel client = (SocketChannel) selKey.channel();
-				receive.compact();//删除已读取的字节
-				client.read(receive);
-				String receiveMsg = new String(receive.array());
-				//两种方案处理，1放到队列一个一个处理服务端消息，有效率且便于操作消息处理顺序等;2接受一个处理一个
+				String receiveMsg = readMsgByNewByteBuff(client);
+				if (receiveMsg == null) {
+					// 读不到数据，此处断开连接即可
+					return;
+				}
+				// 两种方案处理，1放到队列一个一个处理服务端消息，有效率且便于操作消息处理顺序等;2接受一个处理一个
 				System.out.println(receiveMsg);
 				receiveMsgThread.addReceiveMsg(receiveMsg);
-				selKey.interestOps(SelectionKey.OP_WRITE);
-			}else if(selKey.isWritable()){
+				selKey.interestOps(SelectionKey.OP_READ);
+			} else if (selKey.isWritable()) {
 				// 返回为之创建此键的通道。
 				System.out.println("调用写咯...");
 				selKey.interestOps(SelectionKey.OP_READ);
 			}
 		}
 
-		public void shutDown(){
+		private String readMsgByNewByteBuff(SocketChannel client) throws IOException {
+			ByteBuffer receive = ByteBuffer.allocate(1024);
+			if (client.read(receive) == -1) {
+				// 此处断开连接即可
+				return null;
+			}
+			return new String(receive.array()).trim();
+		}
+
+		private String readMsg(SocketChannel client) throws IOException {
+			ByteBuffer receive = ByteBuffer.allocate(1024);// 假如要重用该对象
+			if (client.read(receive) == -1) {
+				// 此处断开连接即可
+				return null;
+			}
+			receive.flip();// 蛋疼，写后一定需要反转，转为适合读的状态
+			int len = receive.getInt();// 这里用remaining()不可行，获取不了需要对方前几位发消息长度
+			byte[] msg = new byte[len];
+			receive.get(msg);
+			receive.compact();// 删除已读数据
+			return new String(msg);
+		}
+
+		public void shutDown() {
 			this.running = false;
 			this.receiveMsgThread.shutdown();
 			try {
@@ -235,13 +257,14 @@ public class NIOClient extends JFrame {
 				e.printStackTrace();
 			}
 		}
-		
+
 		@Override
 		public void run() {
 			try {
 				listen();
 			} catch (IOException e) {
 				e.printStackTrace();
+				receiveMsgThread.clientItem.errorServerClose();
 			}
 		}
 

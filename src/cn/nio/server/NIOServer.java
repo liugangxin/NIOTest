@@ -48,8 +48,18 @@ public class NIOServer extends Thread {
 		while (true) {
 			selector.select();
 			Set<SelectionKey> selectedKeys = selector.selectedKeys();
-			for (SelectionKey key : selectedKeys) {
-				handleKey(key);
+			for (SelectionKey selKey : selectedKeys) {
+				try {
+					handleKey(selKey);
+				} catch (Exception e) {
+					if (!selKey.isAcceptable()) {
+						SocketChannel socketChannel = (SocketChannel) selKey.channel();
+						if (socketChannel != null) {
+							UserInfo userInfo = socketMap.remove(socketChannel);
+							closeSocket(userInfo);
+						}
+					}
+				}
 			}
 			selectedKeys.clear();
 		}
@@ -69,25 +79,25 @@ public class NIOServer extends Thread {
 			socketMap.put(client, new UserInfo(client));
 		} else if (selKey.isReadable()) {
 			// 返回为之创建此键的通道。
+			System.out.println("调用读...");
 			SocketChannel client = (SocketChannel) selKey.channel();
 			UserInfo userInfo = socketMap.get(client);
 			ByteBuffer receive = ByteBuffer.allocate(1024);
-			client.read(receive);
-			String msg = new String(receive.array());
-			
+			if (client.read(receive) == -1) {
+				// 此处断开连接即可
+				closeSocket(userInfo);
+				return;
+			}
+			String msg = new String(receive.array()).trim();
 			userInfo.addReceiveMsg(msg);
 			int hadReceiveMsgNum = readThread.addReadEvent(userInfo);
-			
 			userInfo.addSendMsg(ByteBuffer.wrap(String.format("收到消息[%s]:%s", hadReceiveMsgNum, msg).getBytes()));
 			writeThread.addWriteEvent(userInfo);
-			selKey.interestOps(SelectionKey.OP_WRITE);
+			selKey.interestOps(SelectionKey.OP_READ);
 		} else if (selKey.isWritable()) {
 			// 返回为之创建此键的通道。
 			System.out.println("调用写咯...");
-			SocketChannel client = (SocketChannel) selKey.channel();
-			UserInfo userInfo = socketMap.get(client);
-			writeThread.addWriteEvent(userInfo);
-			selKey.interestOps(SelectionKey.OP_READ);
+			selKey.interestOps(SelectionKey.OP_READ);// 好像用不着...
 		}
 	}
 
@@ -109,6 +119,13 @@ public class NIOServer extends Thread {
 	private void offline(UserInfo userInfo) {
 		socketMap.remove(userInfo.socketChannel);
 		closeSocket(userInfo);
+	}
+
+	private void closeSocket(SocketChannel socketChannel) {
+		UserInfo userInfo = socketMap.remove(socketChannel);
+		if (userInfo != null) {
+			closeSocket(userInfo);
+		}
 	}
 
 	private void closeSocket(UserInfo userInfo) {

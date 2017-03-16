@@ -7,10 +7,8 @@ import java.util.concurrent.LinkedBlockingQueue;
 public class UserInfo {
 
 	public final SocketChannel socketChannel;
-	private LinkedBlockingQueue<ByteBuffer> sendQueue = new LinkedBlockingQueue<ByteBuffer>(
-			10000);
-	private LinkedBlockingQueue<String> receiveMsgQueue = new LinkedBlockingQueue<String>(
-			10000);
+	private LinkedBlockingQueue<ByteBuffer> sendQueue = new LinkedBlockingQueue<ByteBuffer>(10000);
+	private LinkedBlockingQueue<String> receiveMsgQueue = new LinkedBlockingQueue<String>(10000);
 
 	public UserInfo(SocketChannel socketChannel) {
 		this.socketChannel = socketChannel;

@@ -3,7 +3,8 @@ package cn.test;
 import java.nio.ByteBuffer;
 import java.util.Queue;
 
-public class Test {
+//测试ByteBuffer
+public class ByteBufferTest {
 
 	public static void main(String[] args) {
 		ByteBuffer bb = ByteBuffer.allocate(1024);
